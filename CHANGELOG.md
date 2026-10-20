@@ -49,6 +49,7 @@ None.
 
 ### Fixed
 
+- `freezePolicy()` no longer freezes the caller's policy object in place. It returns a deeply frozen **copy** instead: `assets`, `recipients`, `protocols` (each rule and its `fns` array), `recipient_window_caps` (each entry) and `blocked_recipients` are copied before freezing, so a reusable configuration stays editable and shares no mutable state with the returned `ReadonlyPolicyConfig`. Contents, `policyToScVal` output, and fail-closed behaviour are unchanged (#293).
 - Framework adapters fail closed when `toContractCall`/`toContractCalls` throws or returns a malformed call: the handler never runs and the halt is reported as an `undetermined` decision with `AdapterMappingError` as the cause. Returning `null` (or an empty array) still means "not fund-moving" and passes the action through untouched (#316).
 - Adapter observer hooks (`onDecision`, `onBlocked`) are isolated from their failures: a synchronous throw or a rejected promise is swallowed — reported to `blockedHookLogger` when one is supplied — so a failing sink can never resume a halted action, turn a pass into a refusal, or surface as an unhandled rejection (#313).
 - `startHeartbeat()` now validates its inputs before the scheduler exists: a negative or non-finite `maxSkewMs`, a grace window that is not a non-negative safe integer or bigint, a callback that is not callable, and an unusable retry budget are all rejected with an error naming the field — before the first beat, and before the grace window is read from the chain (#341).
