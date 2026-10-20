@@ -26,6 +26,8 @@ instance. Reproduce with `npm run test:integration` (requires `.env.phase2`).
 | Deployed WASM SHA-256 | `f47919f92e78fdd034836aa61955fc338dd56a218c448c37df1867a8c3da0f63` |
 | Same artifact as Phase 1 | yes — verified against the ledger's `ContractExecutable` and the SHA-256 of the fetched bytecode |
 
+**Note** (fix/policy-293-avoid-freezing-caller-owned-policy-objects, PR for #293): `freezePolicy()` no longer freezes the caller's policy object in place; it returns a deeply frozen **copy** — the policy object, `assets`, `recipients`, `protocols` (each rule and its `fns` array), `recipient_window_caps` (each entry) and `blocked_recipients` are copied before freezing. The change is confined to an ownership/immutability helper on the policy model: it copies and freezes, it does not add, drop, normalise or validate any field, and the `ScVal` produced by `policyToScVal` is byte-identical to the one produced for the same policy before this change. The five scenarios recorded below are enforced by the contract during simulation and are unchanged; the new ownership semantics are covered by unit tests in `tests/unit/policy.test.ts`. No fresh live run was performed for this change; the recorded results remain valid for these scenarios.
+
 This is **not** the Phase 1 instance. Phase 1's guard (`CAYJZT4X…`) is left frozen
 by its own dead-man switch as Phase 1's evidence, and is never touched by this
 suite. See `phase2-instance.json` for the deployment record.
