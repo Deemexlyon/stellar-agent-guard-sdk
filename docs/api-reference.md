@@ -163,6 +163,7 @@ one-shot form.
 - `policyFromScVal(scVal)` — Alias for callers using the issue's original function name.
 - `policyToJson(policy)` / `policyFromJson(value)` — Versioned, lossless in-memory JSON shape. All integer fields are decimal strings, and parsing rejects numbers, unknown fields, invalid addresses, and values outside their `u64`/`i128` ranges with a `PolicyDecodeError` field path. `encodePolicyJson` / `decodePolicyJson` are equivalent aliases. This is a persistence/transport shape, not ScVal encoding.
 - `describePolicy(policy: PolicyConfig | null, options?: DescribePolicyOptions): string` — A compact, log-friendly rendering of the policy in force. See [Describing a policy](#describing-a-policy-issue-343).
+- `freezePolicy(policy: PolicyConfig): ReadonlyPolicyConfig` — Returns a deeply frozen **copy** of a policy for the SDK's immutable boundary. The caller's object is never frozen or otherwise mutated, so a reusable configuration stays editable and reusable. See [Freezing a policy without taking ownership](#freezing-a-policy-without-taking-ownership-issue-293).
 - `invoke(options)` / `invoke({ ...options, dryRun: true })` — Broadcasts an admissible result, or returns the full pre-broadcast dry-run trace.
 - `verifyAgentSignature(publicKey, payload, signature): boolean` — Verify-only Ed25519 check against a strkey or raw 32-byte key.
 - `GuardError`, `SimulationError`, `SigningError`, `BroadcastError`, `PolicyDecodeError`, and `ContractResponseError` — Typed failure hierarchy.
@@ -297,3 +298,23 @@ describePolicy(policy);
 ```ts
 describePolicy(policy, { detail: true, nowSecs: 1_700_000_000 });
 ```
+
+#### Freezing a policy without taking ownership (issue #293)
+
+`freezePolicy(policy)` is the immutable boundary helper: it returns a policy whose properties and every nested collection are frozen, so a later mutation throws in strict mode (ESM modules are always strict) instead of silently producing a wrong verdict. It returns `ReadonlyPolicyConfig`, the type the SDK's internal consumers use.
+
+**It copies; it does not freeze its input.** The policy object, `assets`, `recipients`, `protocols` (each rule and its `fns` array), `recipient_window_caps` (each entry) and `blocked_recipients` are all copied before they are frozen. The caller's object shares no mutable state with the returned one and can still be edited or reused:
+
+```ts
+import { freezePolicy, policyToScVal } from "stellar-agent-guard-sdk";
+
+const config = { /* a reusable configuration object */ } satisfies PolicyConfig;
+const policy = freezePolicy(config);
+
+policyToScVal(policy);        // encodes the frozen copy
+config.per_tx_cap = 2_000n;   // still legal: the caller owns `config`
+```
+
+- **Ownership is explicit.** An SDK-owned immutable value never implies a side effect on the caller's value, so the copy is a fix for the earlier behaviour where the input was frozen in place and the same reference was returned. An address, a `bigint` cap or a boolean is an immutable primitive and is kept by value, so the copy costs one array/object per collection — not a deep value copy — and is still cheap enough to call once when a policy first enters the SDK.
+- **Deep, not shallow.** A partially frozen policy would let a caller mutate a rule's `fns` array or a `recipient_window_caps` entry after the SDK accepted it, which is exactly how a passing pre-flight check turns into a wrong verdict.
+- **Contents are unchanged.** Copying and freezing do not add, drop, normalise or validate fields, so the fail-closed policy behaviour and `policyToScVal` output are identical to the policy passed in. Optional collections the caller omitted stay omitted.
