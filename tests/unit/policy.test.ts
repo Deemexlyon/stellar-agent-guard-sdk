@@ -1857,7 +1857,7 @@ describe("freezePolicy", () => {
     const frozen = freezePolicy(samplePolicy({ blocked_recipients: [RECIPIENT] }));
     assert.ok(Object.isFrozen(frozen.blocked_recipients));
     assert.throws(() => {
-      ((frozen as unknown as { blocked_recipients: AccountAddress[] }).blocked_recipients).push(
+      (frozen as unknown as { blocked_recipients: AccountAddress[] }).blocked_recipients.push(
         RECIPIENT,
       );
     }, TypeError);
